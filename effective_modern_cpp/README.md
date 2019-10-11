@@ -78,7 +78,7 @@ decltype(auto) authAndAccess(Container & c, Index i)
 ### Item 4: Know how to view deduced types.
 
 ```
-std::cout << typename(x).name();
+std::cout << typeid(x).name();
 ```
 
 
@@ -213,6 +213,7 @@ Nothing special.
 Use std::atomic for single variable.
 Use std::mutex for multiple variables.
 
+
 ## Item 17: Understand special member function generation.
 
 Special member functions that compilers may generate on their own:
@@ -229,14 +230,131 @@ Special member functions that compilers may generate on their own:
 
 ## Chapter 4: Smart Pointer
 
+
 ### Item 18: Use std::unique_ptr for exclusive-ownership resource management.
 
 std::unique_ptr can't be copied.
 We have to move it.
 
 
-## Chapter 5: Rvalue references, Move semantics, and Perfect Forwarding
+### Item 19: Use std::shared_ptr for shared-ownership resource management.
+Nothing special.
 
+
+### Item 20: Use std::weak_ptr for std::shared_ptr-like pointer that can dangle.
+
+Think of it as std::shared_ptr that don't add the count.
+Use case example is cache. First, store cache with std::shared_ptr. Then point std::weak_ptr to it. After that, if the cache is there, use it. If it isn't there (expired and deleted), std::weak_ptr will be nullptr so we know that the cache is gone.
+
+
+### Item 21: Prefer std:make_unique and std::make_shared to direct use of new.
+
+Reasons to use make:
+* eliminate source code duplication
+* exception safety
+    Compilers are not required to generate code that executes in order. `new Widget` can be executed first. Then `computePriority()` is executed but throw an exception. This result in a leak on `new Widget`.
+    ```
+    processWidget(std::shared_ptr<Widget>(new Widget), computePriority()));
+
+    processWidget(std::make_shared<Widget>(), computePriority());
+* smaller and faster code
+
+For both unique and shared ptr, there are situations where make is inappropriate
+* custom deleter
+* braced initializer
+
+For std::shared_ptr, there are some more situations where make is inappropriate
+* classes with custom memory management
+    std::shared_ptr allocate size for object and control block. When the class have custom memory management, the allocate size isn't matched with the one the custom memory management allocate.
+* system with memory conserns, very large objects, and std::weak_ptrs that outlive the corresponding std::shared_ptrs.
+    When the count goes to zero, the object is destroyed but the memory is still there for std::weak_ptr.
+
+
+### Item 22: When using the Pimpl Idiom, define special member functions in the implementation file.
+
+The Pimpl Idiom decreases build times by reducing compilation dependencies between class clients and class implementations.
+
+```
+#include "gadget.h"
+#include <string>
+#include <vector>
+
+class Widget
+{
+public:
+    Widget();
+    ~Widget();
+
+private:
+    std::string name;
+    std::vector<double> data;
+    Gadget g1, g2, g3;
+};
+```
+
+With Pimpl Idiom, class definition store a pointer to incomplete type. Compilers know the size of pointer and don't need to know the size of type. Below is C++98 code.
+
+Declaration
+```
+class Widget
+{
+public:
+    Widget();
+    ~Widget();
+
+private:
+    struct Impl;
+    Impl *pImpl;
+};
+```
+
+Implementation
+```
+struct Impl
+{
+    std::string name;
+    std::vector<double> data;
+    Gadget g1, g2, g3;
+};
+
+Widget::Widget() : pImpl(new Widget) {};
+Widget::~Widget() { delete pImpl; }
+```
+
+In C++11, we have std::unique_ptr which is automatically destroy the object for us so it's better. However, this will lead problem because destructor, copy and move of std::unique_ptr require complete type. The fix is to declare them at the header and then implement them under struct implementation.
+
+Declaration
+```
+class Widget
+{
+public:
+    Widget();
+    ~Widget();
+    Widget(Widget&& rhs) noexcept;
+    Widget& operator=(Widget&& rhs) noexcept;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> pImpl;
+};
+```
+Implementation
+```
+struct Impl
+{
+    std::string name;
+    std::vector<double> data;
+    Gadget g1, g2, g3;
+};
+
+Widget::Widget() : pImpl(std::make_unique<Widget>()) {};
+Widget::~Widget() = default;
+Widget(Widget&& rhs) noexcept = default;
+Widget& operator=(Widget&& rhs) noexcept = default;
+
+```
+
+## Chapter 5: Rvalue references, Move semantics, and Perfect Forwarding
 
 ### Item 23: Understand std::move and std::forward.
 
@@ -258,12 +376,20 @@ It appears in place that have type deduction
 Use std::forward with universal ref to pass the value to function that have lvalue and rvalue overload.
 
 
-### Iterm 25: Use std::move on rvalue references, std::forward on universal references.
+### Item 25: Use std::move on rvalue references, std::forward on universal references.
 
 Returning local variable has Return Value Optimization (RVO) so we shouldn't use std::move on it.
 
+### Item 26:
+
+### Item 27:
+
+### Item 28:
+
 
 ## Chapter 8: Tweaks
+
+### Item 41:
 
 ### Item 42: Consider emplacement instead of insertion.
 
